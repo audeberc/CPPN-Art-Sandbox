@@ -2,8 +2,8 @@ from GUI.mainwindow import Ui_MainWindow
 from GUI.image_settings import Ui_image_setting_dialog
 from GUI.layer_item import Ui_Form
 from math import *
-
-from PyQt5 import QtCore, QtGui, QtWidgets
+import cv2
+from PyQt5 import QtCore, QtGui, QtWidgets, Qt
 import numpy as np
 from GUI import style
 import sys
@@ -12,6 +12,8 @@ import random
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras import initializers
+from skimage.color import hsv2rgb
+
 
 class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -30,6 +32,8 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.A = 0.5
         self.unit_list = []
         self.activation_list = []
+        self.final_render = []
+
         ### Signal init
         # Img menu
         self.imgsetting_button.clicked.connect(self.open_img_settings)
@@ -42,7 +46,6 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.rndseed_edit.textChanged.connect(self.manual_seed)
         # Variance
         self.var_edit.textChanged.connect(self.set_variance)
-
         self.x_edit.textChanged.connect(self.set_Xfunc)
         self.y_edit.textChanged.connect(self.set_Yfunc)
         self.z_edit.textChanged.connect(self.set_Zfunc)
@@ -52,27 +55,27 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.add_layer()
         self.addlayer_button.clicked.connect(self.add_layer)
         self.layer_list.itemDoubleClicked.connect(self.remove_layer)
-
-        self.preview_button.clicked.connect(self.build_network)
-
+        self.preview_button.clicked.connect(self.preview)
+        self.export_button.clicked.connect(self.export)
+        self.render_button.clicked.connect(self.render_final)
     def open_img_settings(self):
         self.settings_dialog.ui.preview_edit.setText(str(self.preview_res))
         self.settings_dialog.ui.render_edit.setText(str(self.render_res ))
         self.settings_dialog.show()
 
     def save_img_settings(self):
-        self.preview_res = self.settings_dialog.ui.preview_edit.text()
-        self.render_res = self.settings_dialog.ui.render_edit.text()
+        self.preview_res = int(self.settings_dialog.ui.preview_edit.text())
+        self.render_res = int(self.settings_dialog.ui.render_edit.text())
 
     def random_seed(self):
-        self.seed = random.getrandbits(32)
+        self.seed = int(random.getrandbits(32))
         self.rndseed_edit.setText(str(self.seed))
 
     def manual_seed(self):
         self.seed = self.rndseed_edit.text()
 
     def set_variance(self):
-        self.variance = self.var_edit.text()
+        self.variance = float(self.var_edit.text())
 
     def set_Xfunc(self):
         if "x" in self.x_edit.text():
@@ -106,16 +109,73 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         del self.activation_list[-1]
 
     def build_network(self):
-        initialisation = initializers.VarianceScaling(scale=self.variance, distribution="normal", seed=self.seed)
+        initialisation = initializers.VarianceScaling(scale=self.variance, distribution="normal", seed=int(self.seed))
         inputs = Input(shape=(4,))
         x = inputs
         for layer_number in range(self.layer_list.count()):
             x = Dense(self.unit_list[layer_number].value(), activation=self.activation_list[layer_number].currentText(), kernel_initializer=initialisation)(x)
         output = Dense(3, activation='linear', kernel_initializer=initialisation)(x)
-        model = Model(inputs=inputs, outputs=output)
+        self.model = Model(inputs=inputs, outputs=output)
+
+    def build_img_grid(self, x_size, y_size, alpha = 1.0, scale=1.0, f1=(lambda x:x), f2=(lambda x:x), f3=(lambda x,y : sqrt(x**2+y**2))):
+        X, Y = np.meshgrid(np.linspace(-scale,scale,x_size), np.linspace(-scale,scale,y_size), indexing='ij')
+        V = [[f1(x), f2(y), f3(x,y), alpha] for x,y in zip(np.ravel(X),np.ravel(Y))]
+        return np.array(V)
+
+    def render_img(self, model, vector_shape = (20,20), scale=2.0, alpha = 0.50, grid_functs = [(lambda x:x), (lambda x:x), (lambda x,y : sqrt(x**2+y**2))]):
+        V = self.build_img_grid(vector_shape[0], vector_shape[1], scale=scale, alpha=alpha,
+                              f1=grid_functs[0],
+                              f2=grid_functs[1],
+                              f3=grid_functs[2])
+
+        model.compile(optimizer='adam', loss='mse')
+        pred = model.predict(V)
+
+        img = []
+        for i in range(pred.shape[1]):
+            channel = pred[:, i]
+            norm = (channel - channel.min()) / (channel.max()-channel.min())
+            img.append(norm.reshape(vector_shape))
+        img = np.dstack(img)
+
+        return hsv2rgb(((255.0*img)).astype(np.uint8))
+
+    def preview(self):
+        self.build_network()
+        preview = 255*self.render_img(self.model, (self.preview_res, self.preview_res), alpha=self.A, grid_functs=[self.Xfunc,self.Yfunc,self.Zfunc])
+
+        preview = cv2.resize(preview, (1024, 1024), interpolation=cv2.INTER_CUBIC)
+
+        nimage = QtGui.QImage(preview[..., ::-1].astype(np.uint8), 1024, 1024, 1024*3,QtGui.QImage.Format_RGB888)
+        nimage.ndarray = preview
+        pix = QtGui.QPixmap(nimage)
+        self.img_label.setPixmap(pix)
+
+    def render_final(self):
+
+        splash_pix = QtGui.QPixmap('GUI/loading.png')
+        splash = QtWidgets.QSplashScreen(splash_pix, QtCore.Qt.WindowStaysOnTopHint)
+        splash.show()
+        self.build_network()
+
+        final = 255*self.render_img(self.model, (self.render_res, self.render_res), alpha=self.A, grid_functs=[self.Xfunc,self.Yfunc,self.Zfunc])
+
+        final = cv2.resize(final, (1024, 1024), interpolation=cv2.INTER_CUBIC)
+        nimage = QtGui.QImage(final[..., ::-1].astype(np.uint8), 1024, 1024, 1024*3,QtGui.QImage.Format_RGB888)
+        nimage.ndarray = final
+        pix = QtGui.QPixmap(nimage)
+        self.img_label.setPixmap(pix)
+        self.final_render = final
+        splash.close()
+
+    def export(self):
+        self.output_path = str(QtWidgets.QFileDialog.getSaveFileName(self)[0])
+        print(self.output_path)
+        cv2.imwrite(self.output_path, self.final_render)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    app.processEvents()
     form = CPPNApp()
     form.show()
     app.exec_()
