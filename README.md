@@ -3,10 +3,15 @@
 Based on "Compositional Pattern Producing Networks: A Novel Abstraction of Development", Kenneth O.Stanley
 
 
+### Example image
 
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex1.jpg" width="400" height="400" />
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex2.jpg" width="400" height="400" />
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex3.jpg" width="400" height="400" />
 
-![Alt Text](https://gfycat.com/PettyImportantBlueshark)
+### Example animation
 
+[Animated example!](https://gfycat.com/PettyImportantBlueshark)
 
 
 
