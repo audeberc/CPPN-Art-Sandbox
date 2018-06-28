@@ -39,7 +39,8 @@ class Ui_Form(object):
         self.horizontalLayout.addWidget(self.activation_combo)
         self.units_combo = QtWidgets.QSpinBox(self.horizontalLayoutWidget)
         self.units_combo.setMinimum(3)
-        self.units_combo.setMaximum(128)
+        self.units_combo.setMaximum(2048)
+
         self.units_combo.setProperty("value", 16)
         self.units_combo.setObjectName("units_combo")
         self.horizontalLayout.addWidget(self.units_combo)
@@ -58,4 +59,3 @@ class Ui_Form(object):
         self.activation_combo.setItemText(3, _translate("Form", "linear"))
         self.activation_combo.setItemText(4, _translate("Form", "elu"))
         self.activation_combo.setItemText(5, _translate("Form", "relu"))
-

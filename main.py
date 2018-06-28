@@ -1,6 +1,7 @@
 from GUI.mainwindow import Ui_MainWindow
 from GUI.image_settings import Ui_image_setting_dialog
 from GUI.layer_item import Ui_Form
+from GUI.anim_window import Ui_anim_window
 from math import *
 import cv2
 from PyQt5 import QtCore, QtGui, QtWidgets, Qt
@@ -33,7 +34,9 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.unit_list = []
         self.activation_list = []
         self.final_render = []
-
+        self.maxA = -2.0
+        self.minA = 2.0
+        self.anim_frames = 240
         ### Signal init
         # Img menu
         self.imgsetting_button.clicked.connect(self.open_img_settings)
@@ -41,6 +44,12 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.settings_dialog.ui = Ui_image_setting_dialog()
         self.settings_dialog.ui.setupUi(self.settings_dialog)
         self.settings_dialog.ui.buttonBox.accepted.connect(self.save_img_settings)
+        # Anim menu
+        self.animA_button.clicked.connect(self.open_anim_settings)
+        self.anim_dialog =  QtWidgets.QDialog()
+        self.anim_dialog.ui = Ui_anim_window()
+        self.anim_dialog.ui.setupUi(self.anim_dialog)
+        self.anim_dialog.ui.buttonBox.accepted.connect(self.anim)
         # RND
         self.rndseed_button.clicked.connect(self.random_seed)
         self.rndseed_edit.textChanged.connect(self.manual_seed)
@@ -58,10 +67,17 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         self.preview_button.clicked.connect(self.preview)
         self.export_button.clicked.connect(self.export)
         self.render_button.clicked.connect(self.render_final)
+
     def open_img_settings(self):
         self.settings_dialog.ui.preview_edit.setText(str(self.preview_res))
         self.settings_dialog.ui.render_edit.setText(str(self.render_res ))
         self.settings_dialog.show()
+
+    def open_anim_settings(self):
+        self.anim_dialog.ui.min_A_box.setValue((self.maxA))
+        self.anim_dialog.ui.max_A_box.setValue((self.minA))
+        self.anim_dialog.ui.frame_bpx.setValue((self.anim_frames))
+        self.anim_dialog.show()
 
     def save_img_settings(self):
         self.preview_res = int(self.settings_dialog.ui.preview_edit.text())
@@ -86,7 +102,7 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
             self.Yfunc = lambda y : eval(self.y_edit.text())
 
     def set_Zfunc(self):
-        if "z" in self.z_edit.text():
+        if "x" in self.z_edit.text() or "y" in self.z_edit.text():
             self.Zfunc = lambda x, y : eval(self.z_edit.text())
 
     def set_A(self):
@@ -127,7 +143,6 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
                               f1=grid_functs[0],
                               f2=grid_functs[1],
                               f3=grid_functs[2])
-
         model.compile(optimizer='adam', loss='mse')
         pred = model.predict(V)
 
@@ -156,8 +171,9 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         splash_pix = QtGui.QPixmap('GUI/loading.png')
         splash = QtWidgets.QSplashScreen(splash_pix, QtCore.Qt.WindowStaysOnTopHint)
         splash.show()
+        QtCore.QCoreApplication.processEvents()
         self.build_network()
-
+        QtCore.QCoreApplication.processEvents()
         final = 255*self.render_img(self.model, (self.render_res, self.render_res), alpha=self.A, grid_functs=[self.Xfunc,self.Yfunc,self.Zfunc])
 
         final = cv2.resize(final, (1024, 1024), interpolation=cv2.INTER_CUBIC)
@@ -166,12 +182,52 @@ class CPPNApp(QtWidgets.QMainWindow, Ui_MainWindow):
         pix = QtGui.QPixmap(nimage)
         self.img_label.setPixmap(pix)
         self.final_render = final
+        QtCore.QCoreApplication.processEvents()
         splash.close()
 
     def export(self):
         self.output_path = str(QtWidgets.QFileDialog.getSaveFileName(self)[0])
-        print(self.output_path)
         cv2.imwrite(self.output_path, self.final_render)
+
+    def anim(self):
+
+        self.maxA = self.anim_dialog.ui.min_A_box.value()
+        self.minA = self.anim_dialog.ui.max_A_box.value()
+        self.anim_frames = self.anim_dialog.ui.frame_bpx.value()
+        self.output_folder = str(QtWidgets.QFileDialog.getExistingDirectory(None, 'Select a folder:', None, QtWidgets.QFileDialog.ShowDirsOnly))
+        QtCore.QCoreApplication.processEvents()
+        load = LoadScreen(self.anim_frames)
+        load.show()
+        alphas = np.linspace(self.minA,self.maxA,self.anim_frames)
+        QtCore.QCoreApplication.processEvents()
+        for i in range(self.anim_frames):
+            QtCore.QCoreApplication.processEvents()
+            load.progressBar.setValue(i)
+            self.build_network()
+            render_i = 255*self.render_img(self.model, (self.render_res, self.render_res), alpha=alphas[i], grid_functs=[self.Xfunc,self.Yfunc,self.Zfunc])
+            cv2.imwrite(self.output_folder+"/"+str(i)+".png", render_i)
+
+
+class LoadScreen( QtWidgets.QWidget) :
+    def __init__(self, maxvalue, parent = None) :
+        super().__init__( parent)
+        self.setObjectName("Loading")
+        self.parent = parent
+
+        #progress bar
+        self.progressBar = QtWidgets.QProgressBar()
+        self.progressBar.setObjectName("Loading...")
+
+        self.layout = QtWidgets.QVBoxLayout()
+        self.layout.setObjectName("Loading layout")
+        self.setLayout(self.layout)
+
+        self.layout.addWidget(self.progressBar)
+        self.progressBar.setTextVisible(False)
+        self.progressBar.setMinimum(0)
+        self.progressBar.setMaximum(maxvalue)
+        self.setStyleSheet(style.stylesheet)
+        self.progressBar.show()
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
