@@ -10,7 +10,7 @@ Based on "Compositional Pattern Producing Networks: A Novel Abstraction of Devel
 
 
 
-![Animated example](https://gfycat.com/PettyImportantBlueshark)
+[Animated example!](https://gfycat.com/PettyImportantBlueshark)
 
 
 
