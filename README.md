@@ -4,9 +4,13 @@ Based on "Compositional Pattern Producing Networks: A Novel Abstraction of Devel
 
 
 
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex1.jpg" width="400" height="400" />
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex2.jpg" width="400" height="400" />
+<img src="https://github.com/audeberc/CPPN-Art-Sandbox/blob/master/illustrations/ex3.jpg" width="400" height="400" />
 
-![Alt Text](https://gfycat.com/PettyImportantBlueshark)
 
+
+![Animated example](https://gfycat.com/PettyImportantBlueshark)
 
 
 
